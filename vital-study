@@ -1,0 +1,1420 @@
+library(haven)                                         #load the package to read in the data
+library(survival)                                      #load package for survival analysis
+library(survminer)
+library(StepReg)
+setwd("C:/Users/user/Downloads")
+vital_data <- read_sas("vital_data_2019 (1).sas7bdat") ##read in the data from sas
+head(vital_data)                                       #view the first 5 values
+vital_data<-as.data.frame(vital_data)                  #transform into data frame
+tail(vital_data)                                       #view the last 5 values of the data
+str(vital_data)                                        #view each variable separately
+dim(vital_data)                                        #dimension
+summary(vital_data)                                    #useful info regarding our data set
+is.na(vital_data)                                      #identify missing values
+which(is.na(vital_data))                               #as expected there are a lot of missing values
+colSums(is.na(vital_data))                             #compute the total missing values in each column
+library(psych)
+describe(vital_data)                                   #useful summary statistics regarding our data
+                                                    
+# using subset function 
+vital_data_men <- subset(vital_data, sex==1 )          #a subset including all variables and observation for men only
+vital_data_women <- subset(vital_data, sex==2 )
+
+vital_data_intervention <- subset(vital_data, vitdactive==1) ##KATSE FTIAKSE TA 4 GROUP GIA NA EHO TON PLITHISMO TOUS
+
+vital_data_control <- subset(vital_data, sex==2 )        
+        
+###missing values###
+
+# Data visualization using package naniar
+#install.packages("naniar")
+library(naniar)
+vis_miss(vital_data[,c(1,3,4,5,6,7,8,9)], sort_miss = TRUE)#+theme_bw()
+vis_miss(vital_data[,c(2,3,5,6,7,8,9,12,13,14,15,18,42,43)] , sort_miss = TRUE)         #missing values for breast n prostate cancer
+# As VIM package has matrix plot, similarly naniar has the var_miss() function. It provides a summary of whether the 
+# data is missing (in black) or not. It also provides the percentage of missing values in each column.
+#there is used a subset with 12 variables in order to achieve visualisation 
+
+
+#install.packages("mice")
+library(mice)
+#install.packages("VIM")
+library(VIM)
+mice_plot <- aggr(vital_data, col=c('navyblue','yellow'),  ###ammount of missing values overall
+                  numbers=TRUE, sortVars=TRUE,
+                  labels=names(vital_data), cex.axis=.7,
+                  gap=3, ylab=c("Missing data","Pattern")) 
+
+mice_plot <- aggr(vital_data[ ,c(2,3,5,6,7,8,9,12,13,14,15,18,42,43)], col=c('navyblue','yellow'),  #keep only variable with missing values
+                  numbers=TRUE, sortVars=TRUE,
+                  labels=names(vital_data[ ,c(2,3,5,6,7,8,9,12,13,14,15,18,42,43,48,49)]), cex.axis=.7,
+                  gap=3, ylab=c("Missing data","Pattern"))  ###
+mice_plot_men <- aggr(vital_data_men, col=c('navyblue','yellow'), 
+                  numbers=TRUE, sortVars=TRUE,
+                  labels=names(vital_data), cex.axis=.7,
+                  gap=3, ylab=c("Missing data","Pattern")) ##only for men
+
+mice_plot_women <- aggr(vital_data_women, col=c('navyblue','yellow'),  
+                  numbers=TRUE, sortVars=TRUE,
+                  labels=names(vital_data), cex.axis=.7,
+                  gap=3, ylab=c("Missing data","Pattern"))
+
+#continuous variables
+hist(vital_data$bmi, col = "darkseagreen1" , main = "histogram of body mass index" , xlab = "body mass index")
+abline(v=c(18.5,25,30), col= "coral2" , lty= 2 , lwd = 2)
+par(mfrow=c(3,3))
+hist(vital_data$randyrs , col = "khaki1" , main = " " , xlab = "death person-years" )                              #mean an median of almost all person years
+hist(vital_data$miyears , col = "khaki1" , main = " " , xlab = "myocardial infraction pers-yrs")                              #around 5
+hist(vital_data$cabgyears , col = "khaki1" , main = " " , xlab = "CABG(bypass) person-yrs")
+hist(vital_data$ptcayears , col = "khaki1" , main = " " , xlab = "PCI person-yrs")
+hist(vital_data$styears , col = "khaki1" , main = " " , xlab = "stroke person-years")
+hist(vital_data$majryears , col = "khaki1", main = " " ,  xlab = "major cv events person-years")
+hist(vital_data$impryears , col = "khaki1" , main = " " , xlab = "expanded cv events person-years")
+hist(vital_data$chdyears , col = "khaki1" , main = " " , xlab = "coronary heart disease pers-yrs")
+par(mfrow=c(2,2))
+hist(vital_data$malcayrs , col = "lightcoral" , main = " " , xlab = "maligant cancer person-years")
+hist(vital_data$colcayrs , col = "lightcoral" , main = " " , xlab = "colon cancer person-years")
+hist(vital_data$brcayrs , col = "lightcoral" , main = " " , xlab = "breast cancer person-years")
+hist(vital_data$prcayrs , col = "lightcoral" , main = " " , xlab = "prostate cancer person-years")
+par(mfrow=(c(1,1)))
+hist(vital_data$ageyr , col = "darkseagreen1" , main = "histogram of age" , xlab = "age at randomization to VITAL study")                         #age at randomization
+ 
+#qqplot(vital_data$bmi,vital_data$ageyr)        
+
+#kernel density plot (numeric variable)
+d <- density(vital_data$ageyr)     # returns the density data
+plot(d)                            # plots the results
+plot(density(vital_data$bmi))      #cannot be performed if x contains missing values
+
+#scatterplots
+
+plot(vital_data$bmi, vital_data$randyrs, main="Scatterplot",
+     xlab="bmi", ylab="death person-years")
+plot(vital_data$ageyr, vital_data$randyrs, main="Scatterplot",
+     xlab="age", ylab="death person-years")
+
+#categorical variables
+prop.table(table(vital_data$sex))               #contigency table of the counts for each variable separately
+table(vital_data$htnmed)
+table(vital_data$diabmed)
+table(vital_data$diabetes)
+table(vital_data$raceth)
+table(vital_data$cholmed)
+table(vital_data$parhxmi)
+table(vital_data$Aspirin)
+table(vital_data$vitdactive)
+table(vital_data$fishoilactive)
+
+barplot(table(vital_data$sex))     #na allkso ola ta table se prop
+barplot(prop.table(table(vital_data$sex)),ylim = c(0,1),width=c(0.5,0.5))## allakse to
+barplot(table(vital_data$htnmed))
+barplot(table(vital_data$diabmed))
+barplot(table(vital_data$diabetes))
+barplot(table(vital_data$raceth))
+barplot(table(vital_data$cholmed))
+barplot(table(vital_data$parhxmi))
+barplot(table(vital_data$Aspirin))
+barplot(table(vital_data$vitdactive))
+barplot(table(vital_data$fishoilactive))
+
+#combinations of factors
+
+prop.table(table(vital_data$sex,vital_data$diabetes))             #relationship between sex an diabetes
+prop.table(table(vital_data$cholmed,vital_data$raceth))
+table(vital_data$sex,vital_data$hntmed)
+table(vital_data$htnmed,vital_data$Aspirin)
+prop.table(table(vital_data$sex,vital_data$vitdactive))
+prop.table(table(vital_data$sex,vital_data$fishoilactive))       #einai shedon 50%-50% males and females 
+prop.table(table(vital_data$vitdactive,vital_data$parhxmi))       #well separated between trt n placebo
+prop.table(table(vital_data$vitdactive,vital_data$cholmed))
+prop.table(table(vital_data$vitdactive,vital_data$cholmed))
+
+#boxplot numeric vs factor
+boxplot(vital_data$bmi~vital_data$sex,data=vital_data, main="Vital Data",
+        xlab="sex", ylab="body mass index")
+boxplot(vital_data$ageyr~vital_data$diabetes,data=vital_data, main="Vital Data",
+        xlab="diabetes", ylab="age")
+
+#notched Boxplot of numeric against 2 crossed Factors
+#boxes colored for ease of interpretation
+boxplot(vital_data$ageyr~vital_data$diabetes*vital_data$sex, data=vital_data, notch=TRUE,
+        col=(c("gold","darkgreen")),
+        main="age", xlab="diabetes and sex")
+boxplot(vital_data$randyrs~vital_data$diabetes*vital_data$sex, data=vital_data, notch=TRUE,
+        col=(c("gold","darkgreen")),
+        ylab = "death person-years", xlab="diabetes and sex")
+
+
+#stacked bar plots
+
+barplot(table(vital_data$sex,vital_data$diabetes), main="vital data by sex and diabetes",
+        xlab="diabetes", col=c("grey","magenta"),
+        legend = rownames(table(vital_data$sex,vital_data$diabetes)))
+
+barplot(table(vital_data$raceth, vital_data$cholmed), main="vital by race and cholesterol medication",
+        xlab="cholmed", col=c("white","black","brown","yellow","red","magenta"),
+        legend = rownames(table(vital_data$raceth, vital_data$cholmed)))     ##x axis cholmed
+
+barplot(table(vital_data$cholmed, vital_data$raceth), main="vital by race and cholesterol medication",
+        xlab="race", col=c("yellow","magenta"),
+        legend = rownames(table(vital_data$cholmed, vital_data$raceth)))    ##x axis race
+
+#grouped bar plot
+
+barplot(table(vital_data$sex,vital_data$vitdactive), main="vital_data by sex and treatment",
+        xlab="vitamin D", col=c("orange","red"),
+        legend = rownames(table(vital_data$sex,vital_data$vitdactive)), beside=TRUE)
+
+barplot(table(vital_data$sex,vital_data$mideath), main="vital_data by death from myocrdial infraction and sex",
+        xlab=" ", col=c("orange","red"),
+        legend = rownames(table(vital_data$sex,vital_data$mideath)), beside=TRUE)
+barplot(table(vital_data$sex,vital_data$stdeath), main="vital_data by death from stroke and sex",
+        xlab="stroke", col=c("orange","red"),
+        legend = rownames(table(vital_data$sex,vital_data$stdeath)), beside=TRUE)
+
+barplot(table(vital_data$htnmed,vital_data$cvdeath), main="vital_data by death from cv cause and hypertention treated with medication",
+        xlab="death from cardiovascular cause ", col=c("orange","red"),
+        legend = rownames(table(vital_data$htnmed,vital_data$cvdeath)), beside=TRUE)  ###somehow interesting
+chisq.test(vital_data$cvdeath,vital_data$htnmed)             ## iparhei sishetisi
+barplot(table(vital_data$htnmed,vital_data$chdeath), main="vital_data by death from ch disease and hypertention treated with medication",
+        xlab="death from coronary heart disease ", col=c("orange","red"),
+        legend = rownames(table(vital_data$htnmed,vital_data$chdeath)), beside=TRUE)
+chisq.test(vital_data$chdeath,vital_data$htnmed)              ##p-value<0.05
+
+barplot(table(vital_data$diabetes,vital_data$majorcvd), main="vital_data by major cv events and diabetes",
+        xlab="major cardiovascular events", col=c("orange","red"),
+        legend = rownames(table(vital_data$diabetes,vital_data$majorcvd)), beside=TRUE)
+chisq.test(vital_data$majorcvd,vital_data$diabetes)         ##iparhei sishetis
+barplot(table(vital_data$currsmk,vital_data$cadeath), main="vital_data by death from cancer and current smoking",
+        xlab="death from cancer ", col=c("orange","red"),
+        legend = rownames(table(vital_data$currsmk,vital_data$cadeath)), beside=TRUE)
+chisq.test(vital_data$cadeath,vital_data$currsmk)  
+
+barplot(table(vital_data$sex,vital_data$cadeath), main="vital_data by death from cancer and sex",
+        xlab="death from cancer ", col=c("orange","red"),
+        legend = rownames(table(vital_data$sex,vital_data$cadeath)), beside=TRUE)
+chisq.test(vital_data$cadeath,vital_data$sex)
+#correlation involving non-continuous variables
+#two binary
+
+my_data <- vital_data[, c(1,3,4,5,6,7,8,9,10,11)]
+head(my_data)
+install.packages("psych")
+library(psych)
+tetrachoric(table(vital_data$sex,vital_data$diabetes))     #correlation index based on contingency table analysis
+
+#Survival Analysis
+KM_all <- survfit(Surv(time = vital_data$randyrs, event = vital_data$confdeath) ~ 1)
+ggsurvplot(KM_all, conf.int = TRUE, data = vital_data, risk.table = T, cumevents = T)    
+KM_all    #survival curve for all
+KM_vitd <- survfit(Surv(time = vital_data$randyrs, event = vital_data$confdeath) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitd, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitd     #survival curve by active n placebo vitd
+#cancer##
+KM_vitdcancer <- survfit(Surv(time = vital_data$randyrs, event = vital_data$cadeath) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdcancer, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdcancer  #cancer mortality
+KM_vitdcancer <- survfit(Surv(time = vital_data$randyrs, event = vital_data$cadeath) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdcancer, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T, fun = "event", legend.labs = c("Placebo", "Active"),ylim = c(0,0.02), xlab = "Time (person time)",ylab = "Cumulative incidence of total cancer mortality", break.time.by = 1,ggtheme = theme_light())  
+KM_vitdcancer       #transformation of the survival curve,cumulative events (f(y) = 1-y) cancer mortality
+
+KM_vitdmalca <- survfit(Surv(time = vital_data$malcayrs, event = vital_data$malca) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdmalca, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T, fun = "event", legend.labs = c("Placebo", "Active"),ylim = c(0,0.02), xlab = "Time (person time)",ylab = "Cumulative incidence of maligant cancer events", break.time.by = 1,ggtheme = theme_light())  
+KM_vitdmalca      #transformation of the survival curve,cumulative events (f(y) = 1-y) maligant
+
+KM_vitdmideath <- survfit(Surv(time = vital_data$miyears, event = vital_data$mideath) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdmideath, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T, fun = "event", legend.labs = c("Placebo", "Active"),ylim = c(0,0.02), xlab = "Time (person time)",ylab = "Cumulative incidence of myocardial infraction death", break.time.by = 1,ggtheme = theme_light())  
+KM_vitdmideath      #transformation of the survival curve,cumulative events (f(y) = 1-y) cancer mortality
+
+KM_vitdstdeath <- survfit(Surv(time = vital_data$styears, event = vital_data$stdeath) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdstdeath, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T, fun = "event", legend.labs = c("Placebo", "Active"),ylim = c(0,0.02), xlab = "Time (person time)",ylab = "Cumulative incidence of death from stroke", break.time.by = 1,ggtheme = theme_light())  
+KM_vitdstdeath 
+
+KM_vitdmajorcvd <- survfit(Surv(time = vital_data$majryears, event = vital_data$majorcvd) ~ vital_data$vitdactive)
+
+#excluding first two years##    FAIL      ####
+#vital_data_no.f.2yrs <- subset(vital_data, randyrs>2 )
+#head(vital_data_no.f.2yrs$randyrs)
+#KM_vitdcancer2 <- survfit(Surv(time = vital_data_no.f.2yrs$randyrs, event = vital_data_no.f.2yrs$cadeath) ~ vital_data_no.f.2yrs$vitdactive)
+#ggsurvplot(KM_vitdcancer2, pval = TRUE, conf.int = TRUE, data = vital_data_no.f.2yrs , surv.median.line = "hv", risk.table = T, fun = "event")  
+#KM_vitdcancer2       #transformation of the survival curve,cumulative events (f(y) = 1-y)
+#types of cancer
+KM_vitdmalca <- survfit(Surv(time = vital_data$malcayrs, event = vital_data$malca) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdmalca, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T , break.time.by = 1,ggtheme = theme_light())  
+KM_vitdmalca         #survival curve for maligant cancer
+KM_vitdbrca <- survfit(Surv(time = vital_data$brcayrs, event = vital_data$brca) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdbrca, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdbrca         #survival curve for breast cancer
+KM_vitdprca <- survfit(Surv(time = vital_data$prcayrs, event = vital_data$prca) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdprca, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdprca         #survival curve for prostate cancer
+KM_vitdcolca <- survfit(Surv(time = vital_data$colcayrs, event = vital_data$colca) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdcolca, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdcolca         #survival curve for colon cancer
+
+#cardiovascular  disease by vitd
+KM_vitdmajorcvd <- survfit(Surv(time = vital_data$majryears, event = vital_data$majorcvd) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdmajorcvd, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdmajorcvd        #survival curve for major cardiovascular events
+KM_vitdimprocvd <- survfit(Surv(time = vital_data$impryears, event = vital_data$improcvd) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdimprocvd, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdimprocvd        #survival curve for expanded cardiovascular events
+KM_vitdtotmi <- survfit(Surv(time = vital_data$miyears, event = vital_data$totmi) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdtotmi, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdtotmi        #survival curve for total myocardial infraction
+KM_vitdtotst <- survfit(Surv(time = vital_data$styears, event = vital_data$totst) ~ vital_data$vitdactive)
+ggsurvplot(KM_vitdtotst, pval = TRUE, conf.int = TRUE, data = vital_data , surv.median.line = "hv", risk.table = T)  
+KM_vitdtotst        #survival curve for total stroke
+
+
+# cox model selection -----------------------------------------------------
+
+library(MASS)
+vital_data_cox <- vital_data[,-c(20:43,45:51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona <- na.omit(vital_data_cox)
+#full_cox <- coxph(Surv(time = vital_data_cox$randyrs, event = vital_data_cox$confdeath)~ ., data = vital_data_cox) 
+full_cox_nona <- coxph(Surv(time = vital_data_cox_nona$randyrs, event = vital_data_cox_nona$confdeath)~ ., data = vital_data_cox_nona) 
+final_model_nona <- stepAIC(full_cox_nona, direction = "backward", k = 2 , scope = list(upper = ~ . , lower = ~ vitdactive + fishoilactive )) # Step AIC epilogh metavlitwn backwards
+summary(final_model_nona)
+
+empty_cox_nona <- coxph(Surv(time = vital_data_cox_nona$randyrs, event = vital_data_cox_nona$confdeath)~ 1 , data = vital_data_cox_nona)
+final_model_nona2 <- stepAIC(empty_cox_nona, direction = "forward", k = 2 , scope = list(upper = ~ . , lower = ~ vitdactive + fishoilactive )  )   # Step AIC epilogh metavlitwn forward
+summary(final_model_nona2)
+
+#reproduce hazard ratios from the paper
+cox_VITAL_malca <- coxph(Surv( time= vital_data$malcayrs , event = vital_data$malca)~ ageyr + sex + vitdactive + fishoilactive , data = vital_data)
+summary(cox_VITAL_malca)
+cox_VITAL_cadeath <- coxph(Surv( time= vital_data$randyrs , event = vital_data$cadeath)~ ageyr + sex + vitdactive + fishoilactive , data = vital_data)
+summary(cox_VITAL_cadeath)
+cox_VITAL_brca <- coxph(Surv( time= vital_data$brcayrs , event = vital_data$brca)~ ageyr + sex + vitdactive + fishoilactive , data = vital_data)
+summary(cox_VITAL_brca)
+cox_VITAL_prca <- coxph(Surv( time= vital_data$prcayrs , event = vital_data$prca)~ ageyr + sex + vitdactive + fishoilactive , data = vital_data)
+summary(cox_VITAL_prca)
+cox_VITAL_colca <- coxph(Surv( time= vital_data$colcayrs , event = vital_data$colca)~ ageyr + sex + vitdactive + fishoilactive , data = vital_data)
+summary(cox_VITAL_colca)
+
+#KATALOIPA
+
+#cancer mortality
+cox_VITAL_cadeath <- coxph(Surv( time= vital_data_cox_nona0$randyrs , event = vital_data_cox_nona0$cadeath)~ ageyr + sex + currsmk + htnmed + cholmed + raceth , data = vital_data_cox_nona0)
+final_model <- cox_VITAL_cadeath
+final_test <- cox.zph(final_model)     #Test gia proportional hazards
+ggcoxzph(final_test)                          # An pvalue<0.05 den ehv proportional haz
+ggcoxdiagnostics(final_model, type = "dfbeta",
+                 linear.predictions = F, ggtheme = theme_bw())
+ggcoxdiagnostics(final_model, type = "deviance",
+                 linear.predictions = FALSE, ggtheme = theme_bw()) 
+
+#confirmed death
+cox_VITAL_confdeath <- coxph(Surv( time= vital_data_cox_nona1$randyrs , event = vital_data_cox_nona1$confdeath)~ ageyr + currsmk + bmi + VitD20 + diabmed + sex + cholmed + htnmed + parhxmi + Aspirin + VitD31 + VitDIntake  , data = vital_data_cox_nona1)
+final_model <- cox_VITAL_confdeath
+final_test <- cox.zph(final_model)     #Test gia proportional hazards
+ggcoxzph(final_test)                          # An pvalue<0.05 den ehv proportional haz
+ggcoxdiagnostics(final_model, type = "dfbeta",
+                 linear.predictions = F, ggtheme = theme_bw())
+ggcoxdiagnostics(final_model, type = "deviance",
+                 linear.predictions = FALSE, ggtheme = theme_bw()) 
+
+#plot Kaplan Meier curve with cox together##
+KM_RFS <- survfit(Surv(time = data_RFS_cox$time, event = data_RFS_cox$status) ~ 1) # Dhmiourgw to KM model me ta dedomena tou cox model (xwris ta NA)
+my_list <- list(KM = KM_RFS, Cox_Mod = survfit(final_model)) # Ftiaxnw list gia na plotarw kai to KM kai to COX
+ggsurvplot_combine(my_list, ggtheme = theme_minimal(), data = data_RFS_cox
+                   
+#survival analysis for thesis
+
+# cancer mortality --------------------------------------------------------
+
+
+KM_vitdcancer <- survfit(Surv(time = vital_data$randyrs, event = vital_data$cadeath) ~ vital_data$vitdactive)
+ggsurvplot(
+  KM_vitdcancer,                     # survfit object with calculated statistics.
+  data = vital_data,                 # data used to fit survival curves.
+  risk.table = TRUE,                 # show risk table.
+  pval = FALSE,                      # show p-value of log-rank test.
+  conf.int = TRUE,                   # show confidence intervals for 
+                                     # point estimates of survival curves.
+  legend.labs = c("Placebo", "Active"),
+  ylim = c(98,100),                  # present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "death person-years (time)", # customize X axis label.
+  ylab = "survival probability for total cancer mortality",
+  break.time.by = 1,                 # break X axis in time intervals by 60.
+  ggtheme = theme_light(),           # customize plot and risk table with a theme.
+  risk.table.y.text.col = T,        # colour risk table text annotations.
+  risk.table.y.text = FALSE,        # show bars instead of names in text annotations
+  surv.median.line = "hv",
+  fun = "pct")
+KM_vitdcancer
+
+# total cancer ------------------------------------------------------------
+
+KM_vitdmalca <- survfit(Surv(time = vital_data$malcayrs, event = vital_data$malca) ~ vital_data$vitdactive)
+ggsurvplot(
+  KM_vitdcancer,                     # survfit object with calculated statistics.
+  data = vital_data,             # data used to fit survival curves.
+  risk.table = TRUE,       # show risk table.
+  pval = FALSE,             # show p-value of log-rank test.
+  conf.int = TRUE,         # show confidence intervals for 
+  # point estimates of survival curves.
+  legend.labs = c("Placebo", "Active"),
+  ylim = c(98,100),# present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "cancer person-years (time)", # customize X axis label.
+  ylab = "survival probability for maligant cancer",
+  break.time.by = 1,     # break X axis in time intervals by 60.
+  ggtheme = theme_light(), # customize plot and risk table with a theme.
+  risk.table.y.text.col = T, # colour risk table text annotations.
+  risk.table.y.text = FALSE, # show bars instead of names in text annotations
+  surv.median.line = "hv",
+  fun = "pct")
+KM_vitdmalca
+
+# major cardiovascular events(primary) ------------------------------------
+
+KM_vitdmajorcvd <- survfit(Surv(time = vital_data$majryears, event = vital_data$majorcvd) ~ vital_data$vitdactive)
+ggsurvplot(
+  KM_vitdmajorcvd,                     # survfit object with calculated statistics.
+  data = vital_data,             # data used to fit survival curves.
+  risk.table = TRUE,       # show risk table.
+  pval = TRUE,             # show p-value of log-rank test.
+  conf.int = TRUE,         # show confidence intervals for 
+  # point estimates of survival curves.
+  legend.labs = c("Placebo", "Active"),
+  ylim = c(96,100),# present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "major cardiovascular events person-years (time)", # customize X axis label.
+  ylab = "survival probability for major cardiovascular events",
+  break.time.by = 1,     # break X axis in time intervals by 60.
+  ggtheme = theme_light(), # customize plot and risk table with a theme.
+  risk.table.y.text.col = T, # colour risk table text annotations.
+  risk.table.y.text = FALSE, # show bars instead of names in text annotations
+  surv.median.line = "hv",
+  fun = "pct")
+
+
+# omega tria fatty acids CANCER MORTALLITY --------------------------------
+
+KM_fishcancer <- survfit(Surv(time = vital_data$randyrs, event = vital_data$cadeath) ~ vital_data$fishoilactive)
+ggsurvplot(
+  KM_fishcancer,                     # survfit object with calculated statistics.
+  data = vital_data,             # data used to fit survival curves.
+  risk.table = TRUE,       # show risk table.
+  pval = TRUE,             # show p-value of log-rank test.
+  conf.int = TRUE,         # show confidence intervals for 
+  # point estimates of survival curves.
+  legend.labs = c("Placebo", "Active"),
+  ylim = c(98,100),# present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "death person-years (time)", # customize X axis label.
+  ylab = "survival probability for total cancer mortality",
+  break.time.by = 1,     # break X axis in time intervals by 60.
+  ggtheme = theme_light(), # customize plot and risk table with a theme.
+  risk.table.y.text.col = T, # colour risk table text annotations.
+  risk.table.y.text = FALSE, # show bars instead of names in text annotations
+  surv.median.line = "hv",
+  fun = "pct")
+KM_fishcancer
+
+# maligant fish kapla meier -----------------------------------------------
+
+KM_fishmalca <- survfit(Surv(time = vital_data$malcayrs, event = vital_data$malca) ~ vital_data$fishoilactive)
+ggsurvplot(
+  KM_fishmalca,                     # survfit object with calculated statistics.
+  data = vital_data,             # data used to fit survival curves.
+  risk.table = TRUE,       # show risk table.
+  pval = FALSE,             # show p-value of log-rank test.
+  conf.int = TRUE,         # show confidence intervals for 
+  # point estimates of survival curves.
+  legend.labs = c("Placebo", "Active"),
+  ylim = c(92.5,100),# present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "cancer person-years (time)", # customize X axis label.
+  ylab = "survival probability for maligant cancer",
+  break.time.by = 1,     # break X axis in time intervals by 60.
+  ggtheme = theme_light(), # customize plot and risk table with a theme.
+  risk.table.y.text.col = T, # colour risk table text annotations.
+  risk.table.y.text = FALSE, # show bars instead of names in text annotations
+  surv.median.line = "hv",
+  fun = "pct")
+KM_fishmalca
+
+# fishoil major cardiov ---------------------------------------------------
+
+KM_fishmajorcvd <- survfit(Surv(time = vital_data$majryears, event = vital_data$majorcvd) ~ vital_data$fishoilactive)
+ggsurvplot(
+  KM_fishmajorcvd,                     # survfit object with calculated statistics.
+  data = vital_data,             # data used to fit survival curves.
+  risk.table = TRUE,       # show risk table.
+  pval = TRUE,             # show p-value of log-rank test.
+  conf.int = TRUE,         # show confidence intervals for 
+  # point estimates of survival curves.
+  legend.labs = c("Placebo", "Active"),
+  ylim = c(96,100),# present narrower X axis, but not affect
+  # survival estimates.
+  xlab = "major cardiovascular events person-years (time)", # customize X axis label.
+  ylab = "survival probability for major cardiovascular events",
+  break.time.by = 1,     # break X axis in time intervals by 60.
+  ggtheme = theme_light(), # customize plot and risk table with a theme.
+  risk.table.y.text.col = T, # colour risk table text annotations.
+  risk.table.y.text = FALSE, # show bars instead of names in text annotations
+  surv.median.line = "hv",
+  fun = "pct")
+KM_fishmajorcvd$call
+
+
+library(StepReg)
+library(haven)                                         #load the package to read in the data
+library(survival)                                      #load package for survival analysis
+library(survminer)
+library(psych)
+library(MASS)
+library(glmnet)
+
+# cancer death ---------------------------------------------------------------
+
+vital_data_cox0 <- vital_data[,-c(20:44,46:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona0 <- na.omit(vital_data_cox0)
+
+formulaCOX0 = Surv(randyrs, cadeath) ~ .
+
+## LASSO
+y0 = cbind(time=vital_data_cox_nona0$randyrs, status=vital_data_cox_nona0$cadeath)
+x0 = model.matrix(Surv(randyrs, cadeath) ~ .,data = vital_data_cox_nona0)
+fit0 = cv.glmnet(x0, y0, family = "cox")
+coef(fit0)
+
+
+Model_selecAICbid0 = stepwiseCox(formula=formulaCOX0,
+                                data=vital_data_cox_nona0,
+                                selection="bidirection",
+                                select="AIC",
+                                method="efron")
+
+
+Model_selecAICfor0 = stepwiseCox(formula=formulaCOX0,
+                                data=vital_data_cox_nona0,
+                                selection="forward",
+                                select="AIC",
+                                method="efron")
+
+
+
+Model_selecAICbac0 = stepwiseCox(formula=formulaCOX0,
+                                data=vital_data_cox_nona0,
+                                selection="backward",
+                                select="AIC",
+                                method="efron")
+
+
+Model_selecAICfor0
+order((as.numeric(Model_selecAICfor0$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor0$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac0
+order((as.numeric(Model_selecAICbac0$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac0$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid0
+order((as.numeric(Model_selecAICbid0$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid0$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+# Confdeath ---------------------------------------------------------------
+
+vital_data_cox1 <- vital_data[,-c(20:43,45:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona1 <- na.omit(vital_data_cox1)
+
+
+## LASSO
+y1 = cbind(time=vital_data_cox_nona1$randyrs, status=vital_data_cox_nona1$confdeath)
+x1 = model.matrix(Surv(randyrs, confdeath) ~ .,data = vital_data_cox_nona1)
+fit1 = cv.glmnet(x1, y1, family = "cox")
+coef(fit1)
+
+formulaCOX1 = Surv(randyrs, confdeath) ~ .
+Model_selecBIC1 = stepwiseCox(formula=formulaCOX1,
+            data=vital_data_cox_nona1,
+            selection="bidirection",
+            select="HQ",
+            method="efron")
+
+
+
+Model_selecAICbid1 = stepwiseCox(formula=formulaCOX1,
+                           data=vital_data_cox_nona1,
+                           selection="bidirection",
+                           select="AIC",
+                           method="efron")
+
+
+Model_selecAICfor1 = stepwiseCox(formula=formulaCOX1,
+                             data=vital_data_cox_nona1,
+                             selection="forward",
+                             select="AIC",
+                             method="efron")
+
+
+
+Model_selecAICbac1 = stepwiseCox(formula=formulaCOX1,
+                                data=vital_data_cox_nona1,
+                                selection="backward",
+                                select="AIC",
+                                method="efron")
+
+
+Model_selecAICfor1
+order((as.numeric(Model_selecAICfor1$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor1$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac1
+order((as.numeric(Model_selecAICbac1$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac1$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid1
+order((as.numeric(Model_selecAICbid1$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid1$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+# malca ---------------------------------------------------------------
+
+vital_data_cox2 <- vital_data[,-c(19:39,41:45,47:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona2 <- na.omit(vital_data_cox2)
+
+formulaCOX2 = Surv(malcayrs, malca) ~ .
+
+
+## LASSO
+y2 = cbind(time=vital_data_cox_nona2$malcayrs, status=vital_data_cox_nona2$malca)
+x2 = model.matrix(Surv(malcayrs, malca) ~ .,data = vital_data_cox_nona2)
+fit2 = cv.glmnet(x2, y2, family = "cox")
+coef(fit2)
+
+
+
+Model_selecAICbid2 = stepwiseCox(formula=formulaCOX2,
+                                data=vital_data_cox_nona2,
+                                selection="bidirection",
+                                select="AIC",
+                                method="efron")
+
+
+Model_selecAICfor2 = stepwiseCox(formula=formulaCOX2,
+                                data=vital_data_cox_nona2,
+                                selection="forward",
+                                select="AIC",
+                                method="efron")
+
+
+
+Model_selecAICbac2 = stepwiseCox(formula=formulaCOX2,
+                                data=vital_data_cox_nona2,
+                                selection="backward",
+                                select="AIC",
+                                method="efron")
+
+Model_selecAICfor2
+order((as.numeric(Model_selecAICfor2$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor2$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac2
+order((as.numeric(Model_selecAICbac2$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac2$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid2
+order((as.numeric(Model_selecAICbid2$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid2$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+# colon cancer ------------------------------------------------------------
+
+vital_data_cox3 <- vital_data[,-c(19:40,42:46,48,49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona3 <- na.omit(vital_data_cox3)
+
+formulaCOX3 = Surv(colcayrs, colca) ~ .
+
+
+## LASSO
+y3 = cbind(time=vital_data_cox_nona3$colcayrs, status=vital_data_cox_nona3$colca)
+x3 = model.matrix(Surv(colcayrs, colca) ~ .,data = vital_data_cox_nona3)
+fit3 = cv.glmnet(x3, y3, family = "cox")
+coef(fit3)
+
+Model_selecAICbid3 = stepwiseCox(formula=formulaCOX3,
+                                 data=vital_data_cox_nona3,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor3 = stepwiseCox(formula=formulaCOX3,
+                                 data=vital_data_cox_nona3,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac3 = stepwiseCox(formula=formulaCOX3,
+                                 data=vital_data_cox_nona3,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+Model_selecAICfor3
+order((as.numeric(Model_selecAICfor3$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor3$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac3
+order((as.numeric(Model_selecAICbac3$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac3$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid3
+order((as.numeric(Model_selecAICbid3$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid3$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+# breast cancer ------------------------------------------------------------
+
+vital_data_cox4 <- vital_data[,-c(1,19:41,43:47,49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona4 <- na.omit(vital_data_cox4)
+
+formulaCOX4 = Surv(brcayrs, brca) ~ .
+
+## LASSO
+y4 = cbind(time=vital_data_cox_nona4$brcayrs, status=vital_data_cox_nona4$brca)
+x4 = model.matrix(Surv(brcayrs, brca) ~ .,data = vital_data_cox_nona4)
+fit4 = cv.glmnet(x4, y4, family = "cox")
+
+coef(fit4)
+
+
+
+Model_selecAICbid4 = stepwiseCox(formula=formulaCOX4,
+                                 data=vital_data_cox_nona4,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor4 = stepwiseCox(formula=formulaCOX4,
+                                 data=vital_data_cox_nona4,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac4 = stepwiseCox(formula=formulaCOX4,
+                                 data=vital_data_cox_nona4,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+Model_selecAICfor4
+order((as.numeric(Model_selecAICfor4$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor4$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac4
+order((as.numeric(Model_selecAICbac4$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac4$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid4
+order((as.numeric(Model_selecAICbid4$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid4$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+
+# prostate cancer ------------------------------------------------------------
+
+vital_data_cox5 <- vital_data[,-c(1,19:42,44:48,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona5 <- na.omit(vital_data_cox5)
+
+formulaCOX5 = Surv(prcayrs, prca) ~ .
+
+
+## LASSO
+y5 = cbind(time=vital_data_cox_nona5$prcayrs, status=vital_data_cox_nona5$prca)
+x5 = model.matrix(Surv(prcayrs, prca) ~ .,data = vital_data_cox_nona5)
+fit5 = cv.glmnet(x5, y5, family = "cox")
+coef(fit5)
+
+
+
+Model_selecAICbid5 = stepwiseCox(formula=formulaCOX5,
+                                 data=vital_data_cox_nona5,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor5 = stepwiseCox(formula=formulaCOX5,
+                                 data=vital_data_cox_nona5,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac5 = stepwiseCox(formula=formulaCOX5,
+                                 data=vital_data_cox_nona5,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+Model_selecAICfor5
+order((as.numeric(Model_selecAICfor5$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor5$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac5
+order((as.numeric(Model_selecAICbac5$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac5$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid5
+order((as.numeric(Model_selecAICbid5$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid5$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+# major cardiovascular events ------------------------------------------------------------
+
+vital_data_cox6 <- vital_data[,-c(19:33,35,36,38:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona6 <- na.omit(vital_data_cox6)
+
+formulaCOX6 = Surv(majryears, majorcvd) ~ .
+
+
+
+## LASSO
+y6 = cbind(time=vital_data_cox_nona6$majryears, status=vital_data_cox_nona6$majorcvd)
+x6 = model.matrix(Surv(majryears, majorcvd) ~ .,data = vital_data_cox_nona6)
+fit6 = cv.glmnet(x6, y6, family = "cox")
+coef(fit6)
+
+
+
+Model_selecAICbid6 = stepwiseCox(formula=formulaCOX6,
+                                 data=vital_data_cox_nona6,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor6 = stepwiseCox(formula=formulaCOX6,
+                                 data=vital_data_cox_nona6,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac6 = stepwiseCox(formula=formulaCOX6,
+                                 data=vital_data_cox_nona6,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+Model_selecAICfor6
+order((as.numeric(Model_selecAICfor6$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor6$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac6
+order((as.numeric(Model_selecAICbac6$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac6$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid6
+order((as.numeric(Model_selecAICbid6$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid6$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+
+
+
+# expanded cardiovascular events ------------------------------------------------------------
+
+vital_data_cox7 <- vital_data[,-c(19:34,36:37,39:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona7 <- na.omit(vital_data_cox7)
+
+formulaCOX7 = Surv(impryears, imporcvd) ~ .
+
+
+
+## LASSO
+y7 = cbind(time=vital_data_cox_nona7$impryears, status=vital_data_cox_nona7$imporcvd)
+x7 = model.matrix(Surv(impryears, imporcvd) ~ .,data = vital_data_cox_nona7)
+fit7 = cv.glmnet(x7, y7, family = "cox")
+coef(fit7)
+
+
+
+Model_selecAICbid7 = stepwiseCox(formula=formulaCOX7,
+                                 data=vital_data_cox_nona7,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor7 = stepwiseCox(formula=formulaCOX7,
+                                 data=vital_data_cox_nona7,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac7 = stepwiseCox(formula=formulaCOX7,
+                                 data=vital_data_cox_nona7,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+#Model_selecAICbid_treat7 = stepwiseCox(formula=formulaCOX7,
+                                       data=vital_data_cox_nona7,
+                                       selection="bidirection",
+                                       include = c("vitdactive", "fishoilactive"),
+                                       select="AIC",
+                                       method="efron")
+
+
+Model_selecAICfor7
+order((as.numeric(Model_selecAICfor7$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor7$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac7
+order((as.numeric(Model_selecAICbac7$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac7$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid7
+order((as.numeric(Model_selecAICbid7$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid7$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+# myocardial infraction events ------------------------------------------------------------
+
+vital_data_cox8 <- vital_data[,-c(19,21:31,33:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona8 <- na.omit(vital_data_cox8)
+
+formulaCOX8 = Surv(miyears, totmi) ~ .
+
+
+
+## LASSO
+y8 = cbind(time=vital_data_cox_nona8$miyears, status=vital_data_cox_nona8$totmi)
+x8 = model.matrix(Surv(miyears, totmi) ~ .,data = vital_data_cox_nona8)
+fit8 = cv.glmnet(x8, y8, family = "cox")
+coef(fit8)
+
+
+
+Model_selecAICbid8 = stepwiseCox(formula=formulaCOX8,
+                                 data=vital_data_cox_nona8,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor8 = stepwiseCox(formula=formulaCOX8,
+                                 data=vital_data_cox_nona8,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac8 = stepwiseCox(formula=formulaCOX8,
+                                 data=vital_data_cox_nona8,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICfor8
+order((as.numeric(Model_selecAICfor8$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor8$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac8
+order((as.numeric(Model_selecAICbac8$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac8$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid8
+order((as.numeric(Model_selecAICbid8$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid8$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+# stroke events ------------------------------------------------------------
+
+vital_data_cox9 <- vital_data[,-c(19:22,24:32,34:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona9 <- na.omit(vital_data_cox9)
+
+formulaCOX9 = Surv(styears, totst) ~ .
+
+
+
+## LASSO
+y9 = cbind(time=vital_data_cox_nona9$styears, status=vital_data_cox_nona9$totst)
+x9 = model.matrix(Surv(styears, totst) ~ .,data = vital_data_cox_nona9)
+fit9 = cv.glmnet(x9, y9, family = "cox")
+coef(fit9)
+
+
+
+Model_selecAICbid9 = stepwiseCox(formula=formulaCOX9,
+                                 data=vital_data_cox_nona9,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor9 = stepwiseCox(formula=formulaCOX9,
+                                 data=vital_data_cox_nona9,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac9 = stepwiseCox(formula=formulaCOX9,
+                                 data=vital_data_cox_nona9,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+
+
+
+
+
+Model_selecAICfor9
+Model_selecAICbac9
+Model_selecAICbid9
+order((as.numeric(Model_selecAICbid9$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid9$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+# total coronary heart disease events ------------------------------------------------------------
+
+vital_data_cox10 <- vital_data[,-c(19:35,37,38,40:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona10 <- na.omit(vital_data_cox10)
+
+formulaCOX10 = Surv(chdyears, totchd) ~ .
+
+
+
+## LASSO
+y10 = cbind(time=vital_data_cox_nona10$chdyears, status=vital_data_cox_nona10$totchd)
+x10 = model.matrix(Surv(chdyears, totchd) ~ .,data = vital_data_cox_nona10)
+fit10 = cv.glmnet(x10, y10, family = "cox")
+coef(fit10)
+
+
+
+
+Model_selecAICbid10 = stepwiseCox(formula=formulaCOX10,
+                                 data=vital_data_cox_nona10,
+                                 selection="bidirection",
+                                 select="AIC",
+                                 method="efron")
+
+
+Model_selecAICfor10 = stepwiseCox(formula=formulaCOX10,
+                                 data=vital_data_cox_nona10,
+                                 selection="forward",
+                                 select="AIC",
+                                 method="efron")
+
+
+
+Model_selecAICbac10 = stepwiseCox(formula=formulaCOX10,
+                                 data=vital_data_cox_nona10,
+                                 selection="backward",
+                                 select="AIC",
+                                 method="efron")
+
+Model_selecAICfor10
+Model_selecAICbac10
+Model_selecAICbid10
+order((as.numeric(Model_selecAICbid10$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid10$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+# ishemic stroke events ------------------------------------------------------------
+
+vital_data_cox11 <- vital_data[,-c(19:22,24:27,29:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona11 <- na.omit(vital_data_cox11)
+
+formulaCOX11 = Surv(styears, ischemic) ~ .
+
+
+
+## LASSO
+y11 = cbind(time=vital_data_cox_nona11$styears, status=vital_data_cox_nona11$ischemic)
+x11 = model.matrix(Surv(styears, ischemic) ~ .,data = vital_data_cox_nona11)
+fit11 = cv.glmnet(x11, y11, family = "cox")
+coef(fit11)
+
+
+
+Model_selecAICbid11 = stepwiseCox(formula=formulaCOX11,
+                                  data=vital_data_cox_nona11,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor11 = stepwiseCox(formula=formulaCOX11,
+                                  data=vital_data_cox_nona11,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac11 = stepwiseCox(formula=formulaCOX11,
+                                  data=vital_data_cox_nona11,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor11
+Model_selecAICbac11
+Model_selecAICbid11
+order((as.numeric(Model_selecAICbid11$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid11$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+# hemorrhagic stroke events ------------------------------------------------------------
+
+vital_data_cox12 <- vital_data[,-c(19:22,24:28,30:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona12 <- na.omit(vital_data_cox12)
+
+formulaCOX12 = Surv(styears, hemorrhg) ~ .
+
+
+
+## LASSO
+y12 = cbind(time=vital_data_cox_nona12$styears, status=vital_data_cox_nona12$hemorrhg)
+x12 = model.matrix(Surv(styears, hemorrhg) ~ .,data = vital_data_cox_nona12)
+fit12 = cv.glmnet(x12, y12, family = "cox")
+coef(fit12)
+
+
+
+
+Model_selecAICbid12 = stepwiseCox(formula=formulaCOX12,
+                                  data=vital_data_cox_nona12,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor12 = stepwiseCox(formula=formulaCOX12,
+                                  data=vital_data_cox_nona12,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac12 = stepwiseCox(formula=formulaCOX12,
+                                  data=vital_data_cox_nona12,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor12
+Model_selecAICbac12
+Model_selecAICbid12
+order((as.numeric(Model_selecAICbid12$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid12$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+# percutaneous coronary events ------------------------------------------------------------
+
+vital_data_cox13 <- vital_data[,-c(19:21,23:30, 32:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona13 <- na.omit(vital_data_cox13)
+
+formulaCOX13 = Surv(ptcayears, ptca) ~ .
+
+
+
+## LASSO
+y13 = cbind(time=vital_data_cox_nona13$ptcayears, status=vital_data_cox_nona13$ptca)
+x13 = model.matrix(Surv(ptcayears, ptca) ~ .,data = vital_data_cox_nona13)
+fit13 = cv.glmnet(x13, y13, family = "cox")
+coef(fit13)
+
+
+
+Model_selecAICbid13 = stepwiseCox(formula=formulaCOX13,
+                                  data=vital_data_cox_nona13,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor13 = stepwiseCox(formula=formulaCOX13,
+                                  data=vital_data_cox_nona13,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac13 = stepwiseCox(formula=formulaCOX13,
+                                  data=vital_data_cox_nona13,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor13
+order((as.numeric(Model_selecAICfor13$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor13$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac13
+order((as.numeric(Model_selecAICbac13$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac13$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid13
+order((as.numeric(Model_selecAICbid13$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid13$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+# coronary artery bypass graft events ------------------------------------------------------------
+
+vital_data_cox14 <- vital_data[,-c(19:20,22:29,31:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona14 <- na.omit(vital_data_cox14)
+
+formulaCOX14 = Surv(cabgyears, cabg) ~ .
+
+
+
+## LASSO
+y14 = cbind(time=vital_data_cox_nona14$cabgyears, status=vital_data_cox_nona14$cabg)
+x14 = model.matrix(Surv(cabgyears, cabg) ~ .,data = vital_data_cox_nona14)
+fit14 = cv.glmnet(x14, y14, family = "cox")
+coef(fit14)
+
+
+
+Model_selecAICbid14 = stepwiseCox(formula=formulaCOX14,
+                                  data=vital_data_cox_nona14,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor14 = stepwiseCox(formula=formulaCOX14,
+                                  data=vital_data_cox_nona14,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac14 = stepwiseCox(formula=formulaCOX14,
+                                  data=vital_data_cox_nona14,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICfor14
+order((as.numeric(Model_selecAICfor14$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor14$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac14
+order((as.numeric(Model_selecAICbac14$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac14$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid14
+order((as.numeric(Model_selecAICbid14$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid14$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+# death from cardiovascular causes ------------------------------------------------------------
+
+vital_data_cox15 <- vital_data[,-c(20:25,27:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona15 <- na.omit(vital_data_cox15)
+
+formulaCOX15 = Surv(randyrs, cvdeath) ~ .
+
+
+## LASSO
+y15 = cbind(time=vital_data_cox_nona15$randyrs, status=vital_data_cox_nona15$cvdeath)
+x15 = model.matrix(Surv(randyrs, cvdeath) ~ .,data = vital_data_cox_nona15)
+fit15 = cv.glmnet(x15, y15, family = "cox")
+coef(fit15)
+
+
+
+Model_selecAICbid15 = stepwiseCox(formula=formulaCOX15,
+                                  data=vital_data_cox_nona15,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor15 = stepwiseCox(formula=formulaCOX15,
+                                  data=vital_data_cox_nona15,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac15 = stepwiseCox(formula=formulaCOX15,
+                                  data=vital_data_cox_nona15,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor15
+order((as.numeric(Model_selecAICfor15$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor15$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac15
+order((as.numeric(Model_selecAICbac15$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac15$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid15
+order((as.numeric(Model_selecAICbid15$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid15$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+# death from coronary heart disease ------------------------------------------------------------
+
+vital_data_cox16 <- vital_data[,-c(20:26,28:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona16 <- na.omit(vital_data_cox16)
+
+formulaCOX16 = Surv(randyrs, chdeath) ~ .
+
+
+
+## LASSO
+y16 = cbind(time=vital_data_cox_nona16$randyrs, status=vital_data_cox_nona16$chdeath)
+x16 = model.matrix(Surv(randyrs, chdeath) ~ .,data = vital_data_cox_nona16)
+fit16 = cv.glmnet(x16, y16, family = "cox")
+coef(fit16)
+
+
+
+Model_selecAICbid16 = stepwiseCox(formula=formulaCOX16,
+                                  data=vital_data_cox_nona16,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor16 = stepwiseCox(formula=formulaCOX16,
+                                  data=vital_data_cox_nona16,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac16 = stepwiseCox(formula=formulaCOX16,
+                                  data=vital_data_cox_nona16,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor16
+order((as.numeric(Model_selecAICfor16$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor16$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac16
+order((as.numeric(Model_selecAICbac16$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac16$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid16
+order((as.numeric(Model_selecAICbid16$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid16$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+# death from myocardial infraction ------------------------------------------------------------
+
+vital_data_cox17 <- vital_data[,-c(20:23,25:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona17 <- na.omit(vital_data_cox17)
+
+formulaCOX17 = Surv(randyrs, mideath) ~ .
+
+
+## LASSO
+y17 = cbind(time=vital_data_cox_nona17$randyrs, status=vital_data_cox_nona17$mideath)
+x17 = model.matrix(Surv(randyrs, mideath) ~ .,data = vital_data_cox_nona17)
+fit17 = cv.glmnet(x17, y17, family = "cox")
+coef(fit17)
+
+
+
+
+Model_selecAICbid17 = stepwiseCox(formula=formulaCOX17,
+                                  data=vital_data_cox_nona17,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor17 = stepwiseCox(formula=formulaCOX17,
+                                  data=vital_data_cox_nona17,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac17 = stepwiseCox(formula=formulaCOX17,
+                                  data=vital_data_cox_nona17,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor17
+order((as.numeric(Model_selecAICfor17$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICfor17$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbac17
+order((as.numeric(Model_selecAICbac17$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbac17$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+Model_selecAICbid17
+order((as.numeric(Model_selecAICbid17$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+sort((as.numeric(Model_selecAICbid17$`Coefficients of the Selected Variables`$`Pr(>|z|)`,decreasing = F)))
+
+
+
+
+# death from stroke ------------------------------------------------------------
+
+vital_data_cox18 <- vital_data[,-c(20:24,26:49,51)]       # Afairw tis y kai to id giati de xreiazontai
+vital_data_cox_nona18 <- na.omit(vital_data_cox18)
+
+formulaCOX18 = Surv(randyrs, stdeath) ~ .
+
+
+
+## LASSO
+y18 = cbind(time=vital_data_cox_nona18$randyrs, status=vital_data_cox_nona18$stdeath)
+x18 = model.matrix(Surv(randyrs, stdeath) ~ .,data = vital_data_cox_nona18)
+fit18 = cv.glmnet(x18, y18, family = "cox")
+coef(fit18)
+
+
+
+
+Model_selecAICbid18 = stepwiseCox(formula=formulaCOX18,
+                                  data=vital_data_cox_nona18,
+                                  selection="bidirection",
+                                  select="AIC",
+                                  method="efron")
+
+
+Model_selecAICfor18 = stepwiseCox(formula=formulaCOX18,
+                                  data=vital_data_cox_nona18,
+                                  selection="forward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+Model_selecAICbac18 = stepwiseCox(formula=formulaCOX18,
+                                  data=vital_data_cox_nona18,
+                                  selection="backward",
+                                  select="AIC",
+                                  method="efron")
+
+
+
+
+
+
+
+
+
